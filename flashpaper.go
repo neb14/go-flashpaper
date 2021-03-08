@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -224,7 +225,29 @@ func main() {
 	//You can uncomment the non TLS version of ListenAndServe and
 	//run this without TLS if you have taken leave of your senses.
 	//err := http.ListenAndServe(":8080", nil)
-	err := http.ListenAndServeTLS(":8443", "server.crt", "server.key", nil)
+
+	// Ca. 2021/3/8, go's TLS defaults can fall back to deprecated ciphers DES and Triple DES. https://github.com/golang/go/issues/41476
+	// As documented in CVE-2016-2183, a birthday attacks exists on these ciphers.
+	// Configuring TLS without them.
+	server := http.Server{
+		Addr: ":8443",
+		TLSConfig: &tls.Config{
+			CipherSuites: []uint16{ // Recommended ciphers had from https://www.iana.org/assignments/tls-parameters/tls-parameters.xml
+				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+				tls.TLS_CHACHA20_POLY1305_SHA256,
+				tls.TLS_AES_256_GCM_SHA384,
+				tls.TLS_AES_128_GCM_SHA256,
+			},
+		},
+	}
+	err := server.ListenAndServeTLS("server.crt", "server.key")
+	defer server.Close()
+
 	if err != nil {
 		fmt.Printf("main(): %s\n", err)
 		fmt.Printf("Errors usually mean you don't have the required server.crt or server.key files.\n")
